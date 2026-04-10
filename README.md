@@ -6,7 +6,7 @@
 
 Home Assistant integrace pro stahování dat chytrého elektroměru z portálu [EG.D distribuce24](https://portal.distribuce24.cz) přes OpenAPI.
 
-Podporuje stahování **spotřeby elektřiny** a **výroby z fotovoltaiky**. Senzor zobrazuje **celkový součet za den** (kWh) — API poskytuje data v 15minutových intervalech, integrace je sečte do jedné denní hodnoty. Plně kompatibilní s HA Energy dashboardem.
+Podporuje stahování **spotřeby elektřiny** a **výroby z fotovoltaiky**. API poskytuje data v 15minutových intervalech — integrace je vkládá přímo do HA statistik (recorder), takže **Energy dashboard zobrazuje 15minutové rozlišení**. Senzor navíc zobrazuje denní součet (kWh).
 
 ---
 
@@ -14,7 +14,7 @@ Podporuje stahování **spotřeby elektřiny** a **výroby z fotovoltaiky**. Sen
 
 - ⚡ Spotřeba elektřiny (kWh) — profil ICC1
 - ☀️ Výroba elektřiny / dodávka do sítě (kWh) — profil ISC1
-- 📊 Plná podpora HA Energy dashboardu
+- 📊 Import 15minutových statistik do HA recorder — Energy dashboard zobrazuje 15min rozlišení
 - 🔄 Automatická denní aktualizace (data publikuje EG.D od 10:00 za předchozí den)
 - 📝 Rotující log soubor (max 1 MB, 3 zálohy)
 - 🔒 Bezpečné zacházení s tokenem (žádné plaintext logování)
@@ -126,11 +126,21 @@ Po restartu budou vytvořeny následující entity:
 
 ## Energy Dashboard
 
-Integrace je plně kompatibilní s **Energy Dashboardem** Home Assistantu.
+Integrace je plně kompatibilní s **Energy Dashboardem** Home Assistantu a zobrazuje data s **15minutovým rozlišením**.
+
+### Přidání senzorů (denní součet)
 
 Přejdi do **Nastavení → Energie** a přidej:
 - `sensor.egddistribuce_<EAN>_<days>_icc1` jako **Spotřeba ze sítě**
 - `sensor.egddistribuce_<EAN>_<days>_isc1` jako **Dodávka do sítě** (pokud máš FVE)
+
+### Přidání 15minutových statistik
+
+Pro zobrazení 15minutového rozlišení přidej do **Nastavení → Energie** statistiky (ne senzory):
+- `egdczpowerdata:egddistribuce_<EAN>_<days>_icc1` jako **Spotřeba ze sítě**
+- `egdczpowerdata:egddistribuce_<EAN>_<days>_isc1` jako **Dodávka do sítě**
+
+Statistiky se automaticky importují při každé aktualizaci senzoru a jsou bezpečně upsertovány — opakované spuštění nepřidá duplicitní záznamy.
 
 ---
 
@@ -174,6 +184,12 @@ pytest tests/
 ---
 
 ## Changelog
+
+### v0.4.0
+- Import 15minutových dat do HA recorder statistik přes `async_import_statistics`
+- Statistiky dostupné pod ID `egdczpowerdata:egddistribuce_<EAN>_<days>_icc1` / `..._isc1`
+- Energy dashboard zobrazuje 15minutové rozlišení spotřeby i výroby
+- Kumulativní součet navazuje na předchozí statistiky (bezpečný upsert)
 
 ### v0.3.0
 - Přidána podpora konfigurace přes UI (config flow) — Nastavení → Integrace → Přidat integraci
