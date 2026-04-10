@@ -1,7 +1,7 @@
 {
     "domain": "egdczpowerdata",
     "name": "EGD Power Data",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "documentation": "https://github.com/blesk89/HomeAssistant-EGD-distribuce24",
     "requirements": [],
     "dependencies": [],

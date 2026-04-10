@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import logging.handlers
 import requests
@@ -13,6 +14,12 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.util import Throttle
 from homeassistant.helpers.entity_component import async_update_entity
 from homeassistant.core import HomeAssistant
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
+from homeassistant.components.recorder.statistics import (
+    async_import_statistics,
+    get_last_statistics,
+)
 from .const import DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_EAN, CONF_DAYS, TOKEN_URL, DATA_URL
 
 # Create a custom logger for the component
@@ -163,9 +170,12 @@ class EGDPowerDataSensor(Entity):
             data = response.json()
 
             try:
-                total_value = sum(item['value'] for item in data[0]['data']) / 4
+                items = data[0]['data']
+                values = [item['value'] for item in items]
+                total_value = sum(values) / 4
             except (KeyError, IndexError, TypeError):
                 total_value = 0
+                values = []
 
             self._state = total_value
             self._attributes = {
@@ -175,9 +185,51 @@ class EGDPowerDataSensor(Entity):
                 'local_etime': local_etime.strftime('%Y-%m-%d %H:%M:%S %Z%z')
             }
             _LOGGER.debug(f"Total value: {total_value}")
+
+            if values:
+                asyncio.run_coroutine_threadsafe(
+                    self._import_statistics(values, utc_stime),
+                    self.hass.loop
+                )
         except requests.exceptions.RequestException as e:
             _LOGGER.error(f"Error retrieving data: {e}")
             raise
+
+    async def _import_statistics(self, values, start_time):
+        statistic_id = f"egdczpowerdata:{self._unique_id}"
+
+        last_sum = 0.0
+        try:
+            recorder = get_instance(self.hass)
+            last_stats = await recorder.async_add_executor_job(
+                get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
+            )
+            if last_stats and statistic_id in last_stats:
+                entry = last_stats[statistic_id][0]
+                if entry.get("sum") is not None and entry.get("start") < start_time:
+                    last_sum = entry["sum"]
+        except Exception as e:
+            _LOGGER.warning(f"Could not get last statistics: {e}")
+
+        stats = []
+        cumulative = last_sum
+        interval_start = start_time
+        for value in values:
+            kwh = value / 4
+            cumulative += kwh
+            stats.append(StatisticData(start=interval_start, sum=cumulative, state=kwh))
+            interval_start += timedelta(minutes=15)
+
+        metadata = StatisticMetaData(
+            has_mean=False,
+            has_sum=True,
+            name=f"EGD {self.profile} {self.ean}",
+            source="egdczpowerdata",
+            statistic_id=statistic_id,
+            unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        )
+        async_import_statistics(self.hass, metadata, stats)
+        _LOGGER.debug(f"Imported {len(stats)} statistics for {statistic_id}")
 
 class EGDPowerDataConsumptionSensor(EGDPowerDataSensor):
     def __init__(self, hass, client_id, client_secret, ean, days):

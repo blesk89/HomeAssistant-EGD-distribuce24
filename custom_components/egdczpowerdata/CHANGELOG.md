@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0]
+
+### Added
+- Import 15minutových statistik do HA recorder přes `async_import_statistics`
+  - Statistiky jsou dostupné jako `egdczpowerdata:egddistribuce_{ean}_{days}_{profile}`
+  - Energy dashboard zobrazuje 15minutové rozlišení spotřeby/výroby
+  - Kumulativní součet navazuje na předchozí statistiky (bezpečný upsert)
+- Nová async metoda `_import_statistics` v `EGDPowerDataSensor`
+
+### Changed
+- `manifest.json`: verze `0.3.0` → `0.4.0`
+- `sensor.py`: `_get_data` nyní extrahuje raw 15min hodnoty a spouští import statistik
+
+---
+
 ## [0.3.0]
 
 ### Added
