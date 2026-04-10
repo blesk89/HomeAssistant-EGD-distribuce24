@@ -13,7 +13,7 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.util import Throttle
 from homeassistant.helpers.entity_component import async_update_entity
 from homeassistant.core import HomeAssistant
-from .const import DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, TOKEN_URL, DATA_URL
+from .const import DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_EAN, CONF_DAYS, TOKEN_URL, DATA_URL
 
 # Create a custom logger for the component
 _LOGGER = logging.getLogger(__name__)
@@ -32,15 +32,25 @@ _LOGGER.addHandler(file_handler)
 
 MIN_TIME_BETWEEN_UPDATES = timedelta(hours=24)
 
-CONF_DAYS = "days"
-CONF_EAN = "ean"
-
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_CLIENT_ID): cv.string,
     vol.Required(CONF_CLIENT_SECRET): cv.string,
     vol.Required(CONF_EAN): cv.string,
     vol.Optional(CONF_DAYS, default=1): cv.positive_int,
 })
+
+async def async_setup_entry(hass, entry, async_add_entities):
+    client_id = entry.data[CONF_CLIENT_ID]
+    client_secret = entry.data[CONF_CLIENT_SECRET]
+    ean = entry.data[CONF_EAN]
+    days = entry.data.get(CONF_DAYS, 1)
+
+    async_add_entities([
+        EGDPowerDataStatusSensor(hass, client_id, client_secret, ean, days),
+        EGDPowerDataConsumptionSensor(hass, client_id, client_secret, ean, days),
+        EGDPowerDataProductionSensor(hass, client_id, client_secret, ean, days),
+    ], True)
+
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
     client_id = config[CONF_CLIENT_ID]

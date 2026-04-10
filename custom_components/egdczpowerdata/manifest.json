@@ -1,13 +1,14 @@
 {
     "domain": "egdczpowerdata",
     "name": "EGD Power Data",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "documentation": "https://github.com/blesk89/HomeAssistant-EGD-distribuce24",
     "requirements": [],
     "dependencies": [],
     "codeowners": [
         "@blesk89"
     ],
+    "config_flow": true,
     "iot_class": "cloud_polling",
     "icon": "custom_components/egdczpowerdata/icon.png"
 }
