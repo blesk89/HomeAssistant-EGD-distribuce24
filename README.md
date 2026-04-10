@@ -6,7 +6,7 @@
 
 Home Assistant integrace pro stahování dat chytrého elektroměru z portálu [EG.D distribuce24](https://portal.distribuce24.cz) přes OpenAPI.
 
-Podporuje stahování **spotřeby elektřiny** a **výroby z fotovoltaiky** v 15minutových intervalech, plně kompatibilní s HA Energy dashboardem.
+Podporuje stahování **spotřeby elektřiny** a **výroby z fotovoltaiky**. Senzor zobrazuje **celkový součet za den** (kWh) — API poskytuje data v 15minutových intervalech, integrace je sečte do jedné denní hodnoty. Plně kompatibilní s HA Energy dashboardem.
 
 ---
 
@@ -64,6 +64,14 @@ Podporuje stahování **spotřeby elektřiny** a **výroby z fotovoltaiky** v 15
 ---
 
 ## Konfigurace
+
+### Přes uživatelské rozhraní (doporučeno, od v0.3.0)
+
+1. Přejdi do **Nastavení → Integrace → Přidat integraci**
+2. Vyhledej **EGD Power Data**
+3. Vyplň Client ID, Client Secret, EAN a počet dní
+
+### Přes configuration.yaml
 
 Přidej do souboru `configuration.yaml`:
 
@@ -166,6 +174,12 @@ pytest tests/
 ---
 
 ## Changelog
+
+### v0.3.0
+- Přidána podpora konfigurace přes UI (config flow) — Nastavení → Integrace → Přidat integraci
+- Ochrana proti duplicitní konfiguraci stejného EAN
+- Přidány překlady UI formuláře (cs)
+- Stávající konfigurace přes `configuration.yaml` zůstává funkční
 
 ### v0.2.0
 - Opraven interval pollingu (15 min → 24 hodin)
