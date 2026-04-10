@@ -9,5 +9,5 @@
         "@blesk89"
     ],
     "iot_class": "cloud_polling",
-    "icon": "custom_components/egdczpowerdata/icon.svg"
+    "icon": "custom_components/egdczpowerdata/icon.png"
 }
