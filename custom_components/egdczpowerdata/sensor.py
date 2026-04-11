@@ -84,8 +84,8 @@ class EGDPowerDataSensor(Entity):
         self.profile = profile
         self._state = None
         self._attributes = {}
-        self._unique_id = f"egddistribuce_{ean}_{days}_{profile.lower()}"
-        self.entity_id = f"sensor.egddistribuce_{ean}_{days}_{profile.lower()}"
+        self._unique_id = f"egddistribuce_{ean}_{profile.lower()}"
+        self.entity_id = f"sensor.egddistribuce_{ean}_{profile.lower()}"
         _LOGGER.debug(f"Initialized EGDPowerDataSensor with EAN: {self.ean}, Profile: {self.profile}")
 
     @property
@@ -285,8 +285,8 @@ class EGDPowerDataStatusSensor(Entity):
         self.days = days
         self._state = None
         self._attributes = {}
-        self._unique_id = f"egddistribuce_status_{ean}_{days}"
-        self.entity_id = f"sensor.egddistribuce_status_{ean}_{days}"
+        self._unique_id = f"egddistribuce_status_{ean}"
+        self.entity_id = f"sensor.egddistribuce_status_{ean}"
         _LOGGER.debug(f"Initialized EGDPowerDataStatusSensor with EAN: {self.ean}")
 
     @property
@@ -317,8 +317,8 @@ class EGDPowerDataStatusSensor(Entity):
     async def _update_related_sensors(self):
         _LOGGER.debug(f"Updating related sensors for EAN: {self.ean}")
         for entity_id in [
-            f"sensor.egddistribuce_{self.ean}_{self.days}_icc1",
-            f"sensor.egddistribuce_{self.ean}_{self.days}_isc1"
+            f"sensor.egddistribuce_{self.ean}_icc1",
+            f"sensor.egddistribuce_{self.ean}_isc1"
         ]:
             try:
                 await async_update_entity(self.hass, entity_id)
