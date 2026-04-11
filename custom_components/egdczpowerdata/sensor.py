@@ -239,6 +239,7 @@ class EGDPowerDataSensor(Entity):
             source="egdczpowerdata",
             statistic_id=statistic_id,
             unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            unit_class="energy",
         )
         async_add_external_statistics(self.hass, metadata, stats)
         _LOGGER.debug(f"Imported {len(stats)} statistics for {statistic_id}")
