@@ -1,0 +1,18 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EGD Power Data",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret",
+          "ean": "EAN",
+          "days": "Počet dní"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Tato integrace je již nakonfigurována pro zadaný EAN."
+    }
+  }
+}
