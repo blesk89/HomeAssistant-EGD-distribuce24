@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.1]
+
+### Fixed
+- Oprava blokujícího `self.update()` v konstruktorech senzorů
+- `async_import_statistics` → `async_add_external_statistics` (HA 2026.4)
+- Agregace 15min hodnot do hodinových bucketů
+- Přidáno `mean_type=StatisticMeanType.NONE` do `StatisticMetaData`
+- Odstraněno `update_before_add=True` z `add_entities`
+
+---
+
 ## [0.4.0]
 
 ### Added
