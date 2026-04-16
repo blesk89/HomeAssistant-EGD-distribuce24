@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.6.0]
+
+### Added
+- Podpora načítání dat za libovolně dlouhé historické období (backfill)
+  - API požadavky se automaticky dělí do bloků po 30 dnech (limit pageSize=3000)
+  - Stačí nastavit vyšší hodnotu parametru `days` (např. 365 pro celý rok)
+  - Kumulativní součet statistik správně navazuje na existující data v databázi
+- Nová metoda `_fetch_all_chunks` — stahuje data po blocích a vrací sloučený hodinový dict
+- Nová třídní konstanta `_CHUNK_DAYS = 30` — velikost jednoho bloku
+
+### Changed
+- `_get_data`: místo jednoho API volání nyní volá `_fetch_all_chunks`
+- `_import_statistics`: přijímá `dict {hour_utc: kWh}` místo flat listu hodnot a počátečního timestampu
+- `sensor.py`: `days` se čte přednostně z `entry.options` (umožňuje změnu přes UI bez přeinstalace)
+- `manifest.json`: verze `0.5.1` → `0.6.0`
+- Výchozí hodnota `days` změněna z 1 na 7
+
+### UI — Options Flow (Konfigurovat)
+- Uživatel může po nastavení integrace kdykoli změnit `Počet dní zpětně` přes tlačítko **Konfigurovat**
+- Formulář obsahuje popis: nastavení vyššího počtu dní (např. 365) spustí jednorázový historický import
+- Po uložení se integrace automaticky restartuje a při příštím obnovení stáhne historická data
+- `__init__.py`: přidán `update_listener` → reload při změně options
+- `config_flow.py`: přidán `EGDCZPowerDataOptionsFlow`
+- `strings.json` + `translations/cs.json`: přidána sekce `options` s popisky polí
+
+---
+
 ## [0.5.1]
 
 ### Fixed

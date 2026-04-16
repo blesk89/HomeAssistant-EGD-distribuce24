@@ -53,7 +53,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     client_id = entry.data[CONF_CLIENT_ID]
     client_secret = entry.data[CONF_CLIENT_SECRET]
     ean = entry.data[CONF_EAN]
-    days = entry.data.get(CONF_DAYS, 1)
+    # Options mají přednost před původní konfigurací (umožňuje změnu přes UI bez přeinstalace)
+    days = entry.options.get(CONF_DAYS, entry.data.get(CONF_DAYS, 7))
 
     async_add_entities([
         EGDPowerDataStatusSensor(hass, client_id, client_secret, ean, days),
@@ -75,6 +76,10 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     add_entities([status_sensor, consumption_sensor, production_sensor])
 
 class EGDPowerDataSensor(Entity):
+    # EGD API vrací 15minutová data; pageSize=3000 pokryje max ~31 dní (3000/4/24).
+    # Při větším rozsahu (parametr 'days') dělíme požadavky do bloků po _CHUNK_DAYS dnech.
+    _CHUNK_DAYS = 30
+
     def __init__(self, hass, client_id, client_secret, ean, days, profile):
         self.hass = hass
         self.client_id = client_id
@@ -140,6 +145,12 @@ class EGDPowerDataSensor(Entity):
             raise
 
     async def _get_data(self, token):
+        """Stáhne data za celé nastavené období a importuje je jako statistiky.
+
+        Pokud je nastavený počet dní větší než _CHUNK_DAYS, rozsah se automaticky
+        rozdělí do více API požadavků, aby se nepřekročil limit pageSize=3000.
+        To umožňuje zpětné načtení dat i za celý rok nebo více.
+        """
         _LOGGER.debug("Retrieving consumption/production data")
 
         local_stime = (datetime.datetime.now() - timedelta(days=self.days)).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -148,25 +159,59 @@ class EGDPowerDataSensor(Entity):
         local_stime = local_stime.replace(tzinfo=PRAGUE_TZ)
         local_etime = local_etime.replace(tzinfo=PRAGUE_TZ)
 
-        utc_stime = local_stime.astimezone(UTC_TZ)
-        utc_etime = local_etime.astimezone(UTC_TZ)
-
-        headers = {
-            'Authorization': f'Bearer {token}'
-        }
-        params = {
-            'ean': self.ean,
-            'profile': self.profile,
-            'from': utc_stime.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-            'to': utc_etime.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-            'pageSize': 3000
-        }
-
-        session = async_get_clientsession(self.hass)
         try:
+            hourly_buckets = await self._fetch_all_chunks(token, local_stime, local_etime)
+
+            total_value = round(sum(hourly_buckets.values()), 3)
+            self._state = total_value
+            self._attributes = {
+                'local_stime': local_stime.strftime('%Y-%m-%d %H:%M:%S %Z%z'),
+                'local_etime': local_etime.strftime('%Y-%m-%d %H:%M:%S %Z%z'),
+            }
+            _LOGGER.debug(f"Total value: {total_value}")
+
+            if hourly_buckets:
+                await self._import_statistics(hourly_buckets)
+        except Exception as e:
+            _LOGGER.error(f"Error retrieving data: {e}")
+            raise
+
+    async def _fetch_all_chunks(self, token, local_stime, local_etime):
+        """Stáhne data v blocích po _CHUNK_DAYS dnech a vrátí sloučený dict {hour_utc: kWh}.
+
+        EGD API má limit pageSize=3000 (15min intervalů ≈ 31 dní). Pro větší rozsahy
+        (např. při zpětném načítání celého roku) se rozsah rozdělí na více požadavků.
+        Token se před každým dalším blokem automaticky obnoví.
+        """
+        session = async_get_clientsession(self.hass)
+        hourly_buckets: dict = {}
+
+        chunk_start = local_stime
+        while chunk_start <= local_etime:
+            # Konec bloku: buď _CHUNK_DAYS dní od začátku, nebo konec celého rozsahu
+            chunk_end = min(
+                chunk_start + timedelta(days=self._CHUNK_DAYS) - timedelta(minutes=15),
+                local_etime,
+            )
+
+            utc_from = chunk_start.astimezone(UTC_TZ)
+            utc_to   = chunk_end.astimezone(UTC_TZ)
+
+            params = {
+                'ean': self.ean,
+                'profile': self.profile,
+                'from': utc_from.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                'to':   utc_to.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                'pageSize': 3000,
+            }
             _LOGGER.debug(f"Request params: {params}")
             _LOGGER.debug(f"Data URL: {DATA_URL}")
-            async with session.get(DATA_URL, headers=headers, params=params) as response:
+
+            # Pro druhý a další blok obnov token (platnost tokenu je omezená)
+            if chunk_start != local_stime:
+                token = await self._get_access_token()
+
+            async with session.get(DATA_URL, headers={'Authorization': f'Bearer {token}'}, params=params) as response:
                 _LOGGER.debug(f"Response status code: {response.status}")
                 response.raise_for_status()
                 data = await response.json()
@@ -174,29 +219,33 @@ class EGDPowerDataSensor(Entity):
             try:
                 items = data[0]['data']
                 values = [item['value'] for item in items]
-                total_value = sum(values) / 4
             except (KeyError, IndexError, TypeError):
-                total_value = 0
                 values = []
 
-            self._state = total_value
-            self._attributes = {
-                'stime': utc_stime.strftime('%Y-%m-%d %H:%M:%S %Z%z'),
-                'etime': utc_etime.strftime('%Y-%m-%d %H:%M:%S %Z%z'),
-                'local_stime': local_stime.strftime('%Y-%m-%d %H:%M:%S %Z%z'),
-                'local_etime': local_etime.strftime('%Y-%m-%d %H:%M:%S %Z%z')
-            }
-            _LOGGER.debug(f"Total value: {total_value}")
+            # Agregace 15minutových hodnot do hodinových košů (4 intervaly = 1 hodina)
+            interval_start = utc_from
+            for value in values:
+                hour_start = interval_start.replace(minute=0, second=0, microsecond=0)
+                hourly_buckets[hour_start] = hourly_buckets.get(hour_start, 0.0) + value / 4
+                interval_start += timedelta(minutes=15)
 
-            if values:
-                await self._import_statistics(values, utc_stime)
-        except Exception as e:
-            _LOGGER.error(f"Error retrieving data: {e}")
-            raise
+            chunk_start = chunk_start + timedelta(days=self._CHUNK_DAYS)
 
-    async def _import_statistics(self, values, start_time):
+        return hourly_buckets
+
+    async def _import_statistics(self, hourly_buckets: dict):
+        """Importuje hodinové statistiky do HA recorder.
+
+        Kumulativní součet (sum) navazuje na poslední uložený záznam v databázi,
+        takže nová data správně pokračují v existující časové řadě.
+        """
         statistic_id = f"egdczpowerdata:{self._unique_id}"
 
+        sorted_hours = sorted(hourly_buckets.keys())
+        if not sorted_hours:
+            return
+
+        # Načti poslední uložený kumulativní součet, pokud existuje záznam před prvním novým
         last_sum = 0.0
         try:
             recorder = get_instance(self.hass)
@@ -211,22 +260,14 @@ class EGDPowerDataSensor(Entity):
                         entry_start_dt = datetime.datetime.fromtimestamp(entry_start, tz=UTC_TZ)
                     else:
                         entry_start_dt = entry_start
-                    if entry_start_dt < start_time:
+                    if entry_start_dt < sorted_hours[0]:
                         last_sum = entry["sum"]
         except Exception as e:
             _LOGGER.warning(f"Could not get last statistics: {e}")
 
-        # Aggregate 15-minute values into hourly buckets (4 intervals per hour)
-        hourly_buckets: dict = {}
-        interval_start = start_time
-        for value in values:
-            hour_start = interval_start.replace(minute=0, second=0, microsecond=0)
-            hourly_buckets[hour_start] = hourly_buckets.get(hour_start, 0.0) + value / 4
-            interval_start += timedelta(minutes=15)
-
         stats = []
         cumulative = last_sum
-        for hour_start in sorted(hourly_buckets):
+        for hour_start in sorted_hours:
             kwh = hourly_buckets[hour_start]
             cumulative += kwh
             stats.append(StatisticData(start=hour_start, sum=cumulative, state=kwh))

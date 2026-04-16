@@ -3,16 +3,34 @@
     "step": {
       "user": {
         "title": "EGD Power Data",
+        "description": "Zadejte přihlašovací údaje z portálu distribuce24.cz a číslo odběrného místa (EAN).",
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret",
           "ean": "EAN",
           "days": "Počet dní"
+        },
+        "data_description": {
+          "days": "Počet dní zpětně, za které se budou stahovat data. Výchozí hodnota 7 dní pokrývá aktuální týden. Pro první načtení historických dat nastavte vyšší hodnotu (např. 365 pro celý rok) — data se stáhnou automaticky při prvním spuštění."
         }
       }
     },
     "abort": {
       "already_configured": "Tato integrace je již nakonfigurována pro zadaný EAN."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Nastavení EGD Power Data",
+        "description": "Změnou počtu dní můžete spustit zpětné načtení historických dat. Po uložení se integrace restartuje a při příštím obnovení stáhne data za celé zadané období.",
+        "data": {
+          "days": "Počet dní zpětně"
+        },
+        "data_description": {
+          "days": "Výchozí hodnota 7 dní zajišťuje každodenní aktualizaci. Pro jednorázový historický import nastavte vyšší hodnotu (např. 365 = celý rok, 730 = 2 roky). Data se stahují po 30denních blocích, takže limit API není překročen. Po dokončení importu doporučujeme vrátit hodnotu zpět na 1."
+        }
+      }
     }
   }
 }
