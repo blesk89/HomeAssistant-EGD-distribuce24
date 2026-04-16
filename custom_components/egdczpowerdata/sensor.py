@@ -31,7 +31,7 @@ _LOGGER.setLevel(logging.DEBUG)
 
 # Rotating file handler — max 1 MB, 3 zálohy
 file_handler = logging.handlers.RotatingFileHandler(
-    '/config/egddistribuce.log',
+    '/config/egdczpowerdata.log',
     maxBytes=1_000_000,
     backupCount=3
 )
