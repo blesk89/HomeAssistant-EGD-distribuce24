@@ -150,17 +150,36 @@ class EGDPowerDataSensor(Entity):
         Pokud je nastavený počet dní větší než _CHUNK_DAYS, rozsah se automaticky
         rozdělí do více API požadavků, aby se nepřekročil limit pageSize=3000.
         To umožňuje zpětné načtení dat i za celý rok nebo více.
+
+        EGD API vrací 0 pro celý rozsah, pokud nejnovější dny nemají publikovaná data.
+        Proto se local_etime postupně zkracuje (max 10 pokusů) dokud EGD nevrátí data.
         """
         _LOGGER.debug("Retrieving consumption/production data")
 
         local_stime = (datetime.datetime.now() - timedelta(days=self.days)).replace(hour=0, minute=0, second=0, microsecond=0)
-        local_etime = (datetime.datetime.now() - timedelta(days=1)).replace(hour=23, minute=45, second=0, microsecond=0)
-
         local_stime = local_stime.replace(tzinfo=PRAGUE_TZ)
-        local_etime = local_etime.replace(tzinfo=PRAGUE_TZ)
 
         try:
-            hourly_buckets = await self._fetch_all_chunks(token, local_stime, local_etime)
+            hourly_buckets = {}
+            local_etime = None
+            for days_back in range(1, 11):
+                candidate_etime = (datetime.datetime.now() - timedelta(days=days_back)).replace(hour=23, minute=45, second=0, microsecond=0)
+                candidate_etime = candidate_etime.replace(tzinfo=PRAGUE_TZ)
+                # stime posouváme spolu s etime — window zůstává self.days dní
+                candidate_stime = (candidate_etime - timedelta(days=self.days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                _LOGGER.debug(f"Trying local_etime = {candidate_etime} (days_back={days_back})")
+                hourly_buckets = await self._fetch_all_chunks(token, candidate_stime, candidate_etime)
+                if sum(hourly_buckets.values()) > 0:
+                    local_etime = candidate_etime
+                    local_stime = candidate_stime
+                    _LOGGER.debug(f"Found data with local_etime = {local_etime}")
+                    break
+                _LOGGER.debug(f"EGD returned 0 for etime={candidate_etime}, retrying with earlier date")
+
+            if not local_etime:
+                _LOGGER.warning("No data found within search window, EGD data unavailable")
+                local_etime = (datetime.datetime.now() - timedelta(days=1)).replace(hour=23, minute=45, second=0, microsecond=0)
+                local_etime = local_etime.replace(tzinfo=PRAGUE_TZ)
 
             total_value = round(sum(hourly_buckets.values()), 3)
             self._state = total_value
@@ -245,7 +264,9 @@ class EGDPowerDataSensor(Entity):
         if not sorted_hours:
             return
 
-        # Načti poslední uložený kumulativní součet, pokud existuje záznam před prvním novým
+        # Načti poslední uložený kumulativní součet a importuj pouze nové hodiny.
+        # Při days>1 se okno překrývá s předchozím importem — přepisovat historická data
+        # by resetovalo kumulativní součet a zničilo graf. Proto filtrujeme jen nové hodiny.
         last_sum = 0.0
         try:
             recorder = get_instance(self.hass)
@@ -260,8 +281,11 @@ class EGDPowerDataSensor(Entity):
                         entry_start_dt = datetime.datetime.fromtimestamp(entry_start, tz=UTC_TZ)
                     else:
                         entry_start_dt = entry_start
-                    if entry_start_dt < sorted_hours[0]:
-                        last_sum = entry["sum"]
+                    last_sum = entry["sum"]
+                    sorted_hours = [h for h in sorted_hours if h > entry_start_dt]
+                    if not sorted_hours:
+                        _LOGGER.debug(f"No new statistics to import for {statistic_id}")
+                        return
         except Exception as e:
             _LOGGER.warning(f"Could not get last statistics: {e}")
 

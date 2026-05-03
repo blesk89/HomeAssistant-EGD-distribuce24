@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.8.0]
+
+### Fixed
+- Oprava poškozené kumulativní sumy statistik při `days > 1`
+  - Při každém denním běhu se přepisovalo celé okno (`days` dní) s kumulativní sumou začínající od 0
+  - Podmínka `if entry_start_dt < sorted_hours[0]` nikdy nebyla splněna (poslední DB záznam byl vždy uvnitř okna)
+  - Výsledek: kumulativní součet se každý den resetoval → špatný graf v Energy dashboardu
+- **Nová logika** v `_import_statistics`: importují se pouze hodiny **po posledním záznamu v DB**
+  - Kumulativní součet vždy správně navazuje na existující data
+  - Historická data se nepřepisují
+  - Zpětný import (backfill) funguje správně při prázdné DB nebo vysokém `days`
+
+### Changed
+- `manifest.json`: verze `0.7.0` → `0.8.0`
+
+---
+
+## [0.7.0]
+
+### Fixed
+- EGD API vrací 0 pro celý rozsah dat, pokud rozsah zahrnuje dny bez publikovaných dat
+  - Nová retry logika v `_get_data`: pokud API vrátí 0, posune se celé okno (stime i etime) o 1 den zpět
+  - Max 5 pokusů — každý pokus posune okno o 1 den starší
+  - Zajišťuje robustní chování i při EGD zpoždění > 1 den
+
+### Changed
+- Výchozí hodnota `days` zvýšena z 1 na 5 (zachytí data i při 2–3 denním zpoždění EGD API)
+- `manifest.json`: verze `0.6.0` → `0.7.0`
+
+---
+
 ## [0.6.0]
 
 ### Added
