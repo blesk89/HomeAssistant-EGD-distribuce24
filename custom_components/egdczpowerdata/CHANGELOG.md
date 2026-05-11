@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.1]
+
+### Fixed
+- Oprava parsování odpovědi EGD API po změně formátu na straně serveru
+  - EGD API změnilo formát odpovědi z listu `[{...}]` na dict `{...}`
+  - Kód v `_fetch_all_chunks` používal `data[0]['data']`, což způsobovalo `KeyError`
+  - Chyba byla tiše zachycena → prázdná data → integrace hlásila "EGD returned 0" pro všechny dny
+  - Opraveno na `data['data']` — správné čtení klíče ze slovníku
+
+### Changed
+- `manifest.json`: verze `0.8.0` → `0.8.1`
+
+---
+
 ## [0.8.0]
 
 ### Fixed

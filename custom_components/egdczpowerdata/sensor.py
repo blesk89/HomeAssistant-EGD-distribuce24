@@ -236,7 +236,7 @@ class EGDPowerDataSensor(Entity):
                 data = await response.json()
 
             try:
-                items = data[0]['data']
+                items = data['data']
                 values = [item['value'] for item in items]
             except (KeyError, IndexError, TypeError):
                 values = []
